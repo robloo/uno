@@ -24,6 +24,11 @@ namespace Windows.UI.Xaml.Media
 	[TypeConverter(typeof(ImageSourceConverter))]
 	public partial class ImageSource : DependencyObject, IDisposable
 	{
+		/// <summary>
+		/// Notifies that the source has been updated or invalidated and should be redrawn.
+		/// </summary>
+		protected internal event EventHandler Invalidated;
+
 		private static readonly IEventProvider _trace = Tracing.Get(TraceProvider.Id);
 
 		public static class TraceProvider
@@ -190,5 +195,10 @@ namespace Windows.UI.Xaml.Media
 		}
 
 		partial void SetImageLoader();
+
+		public void Invalidate()
+		{
+			Invalidated?.Invoke(this, EventArgs.Empty);
+		}
 	}
 }

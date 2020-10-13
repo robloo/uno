@@ -123,18 +123,17 @@ namespace Windows.UI.Xaml.Controls
 
 		private void OnSourceChanged(ImageSource oldValue, ImageSource newValue)
 		{
-			if (newValue is WriteableBitmap wb)
-			{
-				wb.Invalidated += OnInvalidated;
-				_sourceDisposable.Disposable = Disposable.Create(() => wb.Invalidated -= OnInvalidated);
+			// This code is considered temporary
+			newValue.Invalidated += OnInvalidated;
+			_sourceDisposable.Disposable = Disposable.Create(() => newValue.Invalidated -= OnInvalidated);
 
-				void OnInvalidated(object sdn, EventArgs args)
-				{
-					_openedImage = null;
-					TryOpenImage();
-				}
+			void OnInvalidated(object sdn, EventArgs args)
+			{
+				_openedImage = null;
+				TryOpenImage();
 			}
-			else
+			/*
+			if (newValue is BitmapImage)
 			{
 				_sourceDisposable.Disposable =
 					Source?.RegisterDisposablePropertyChangedCallback(
@@ -148,7 +147,7 @@ namespace Windows.UI.Xaml.Controls
 						}
 					);
 			}
-
+			*/
 			TryOpenImage();
 		}
 

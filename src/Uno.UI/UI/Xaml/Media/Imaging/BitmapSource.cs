@@ -70,6 +70,8 @@ namespace Windows.UI.Xaml.Media.Imaging
 
 #if NETSTANDARD
 			InvalidateSource();
+#else
+			Invalidate();
 #endif
 		}
 
@@ -87,6 +89,8 @@ namespace Windows.UI.Xaml.Media.Imaging
 
 #if NETSTANDARD
 				InvalidateSource();
+#else
+				Invalidate();
 #endif
 			}
 			else

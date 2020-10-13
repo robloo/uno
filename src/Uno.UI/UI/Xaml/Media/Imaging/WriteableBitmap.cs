@@ -6,8 +6,6 @@ namespace Windows.UI.Xaml.Media.Imaging
 {
 	public partial class WriteableBitmap : BitmapSource
 	{
-		internal event EventHandler Invalidated;
-
 		private readonly UwpBuffer _buffer;
 
 		public IBuffer PixelBuffer => _buffer;
@@ -18,14 +16,6 @@ namespace Windows.UI.Xaml.Media.Imaging
 
 			PixelWidth = pixelWidth;
 			PixelHeight = pixelHeight;
-		}
-
-		public void Invalidate()
-		{
-#if __WASM__
-			InvalidateSource();
-#endif
-			Invalidated?.Invoke(this, EventArgs.Empty);
 		}
 	}
 }
