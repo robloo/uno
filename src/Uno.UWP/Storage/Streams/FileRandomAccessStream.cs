@@ -18,7 +18,6 @@ namespace Windows.Storage.Streams
 		{
 			_path = path;
 			_access = access;
-			_share = share;
 
 			// In order to be able to CloneStream() and Get<Input|Output>Stream(),
 			// no matter the provided share, we enforce to 'share' the 'access'.
@@ -26,7 +25,8 @@ namespace Windows.Storage.Streams
 			share &= ~readWriteAccess;
 			share |= readWriteAccess;
 
-			_source = File.Open(_path, FileMode.Open, access, share);
+			_share = share;
+			_source = File.Open(_path, FileMode.OpenOrCreate, access, share);
 		}
 
 		Stream IStreamWrapper.FindStream() => _source;
@@ -47,20 +47,20 @@ namespace Windows.Storage.Streams
 		{
 			if (!CanRead)
 			{
-				throw new InvalidOperationException("The file has been opened for read.");
+				throw new NotSupportedException("The file has been opened for read.");
 			}
 
-			return new FileInputStream(_path, position);
+			return new FileInputStream(_path, _share, position);
 		}
 
 		public IOutputStream GetOutputStreamAt(ulong position)
 		{
 			if (!CanWrite)
 			{
-				throw new InvalidOperationException("The file has been opened for write.");
+				throw new NotSupportedException("The file has been opened for write.");
 			}
 
-			return new FileOutputStream(_path, position);
+			return new FileOutputStream(_path, _share, position);
 		}
 
 		public void Seek(ulong position)

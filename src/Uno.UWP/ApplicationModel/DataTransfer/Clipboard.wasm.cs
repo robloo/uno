@@ -1,4 +1,4 @@
-﻿#nullable enable
+﻿#nullable disable // Not supported by WinUI yet
 
 using System;
 using System.Collections.Generic;
@@ -15,18 +15,20 @@ namespace Windows.ApplicationModel.DataTransfer
 
 		public static void Clear() => SetClipboardText(string.Empty);
 
-		public static void SetContent(DataPackage? content)
+		public static void SetContent(DataPackage/* ? */ content)
+		{
+			CoreDispatcher.Main.RunAsync(
+				CoreDispatcherPriority.High,
+				() => SetContentAsync(content));
+		}
+
+		internal static async Task SetContentAsync(DataPackage/* ? */ content)
 		{
 			var data = content?.GetView(); // Freezes the DataPackage
 			if (data?.Contains(StandardDataFormats.Text) ?? false)
 			{
-				CoreDispatcher.Main.RunAsync(
-					CoreDispatcherPriority.High,
-					async () =>
-					{
-						var text = await data.GetTextAsync();
-						SetClipboardText(text);
-					});
+				var text = await data.GetTextAsync();
+				SetClipboardText(text);
 			}
 		}
 

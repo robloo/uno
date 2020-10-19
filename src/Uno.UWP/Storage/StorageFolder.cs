@@ -18,7 +18,7 @@ using Foundation;
 
 namespace Windows.Storage
 {
-	public partial class StorageFolder : StorageItem, IStorageFolder
+	public partial class StorageFolder : IStorageFolder, IStorageItem, IStorageItem2
 	{
 		public string Path { get; private set; }
 		public string Name { get; private set; }
@@ -132,7 +132,7 @@ namespace Windows.Storage
 					throw new FileNotFoundException(filePath);
 				}
 
-				return StorageFile.GetFileFromLocalPath(filePath);
+				return StorageFile.GetFileFromPath(filePath);
 			});
 
 		public IAsyncOperation<global::Windows.Storage.IStorageItem> GetItemAsync(string name) =>

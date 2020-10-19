@@ -119,7 +119,33 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 						break;
 					}
 
-				} while (type.Name != "Object");
+				} while (!Equals(type, _objectSymbol));
+			}
+
+			return false;
+		}
+
+		private bool IsType(XamlType xamlType, ISymbol typeSymbol)
+		{
+			var type = FindType(xamlType);
+
+			if (type != null)
+			{
+				do
+				{
+					if (Equals(type, typeSymbol))
+					{
+						return true;
+					}
+
+					type = type.BaseType;
+
+					if (type == null)
+					{
+						break;
+					}
+
+				} while (!Equals(type, _objectSymbol));
 			}
 
 			return false;
@@ -133,7 +159,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 			{
 				do
 				{
-					if (type.GetAllProperties().Any(property => property.Name == propertyName))
+					if (type.GetAllPropertiesWithName(propertyName).Any())
 					{
 						return true;
 					}
@@ -268,8 +294,8 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 		{
 			if (propertyOwner != null)
 			{
-				var propertyDependencyPropertyQuery = propertyOwner.GetAllProperties().Where(p => p.Name == name + "Property");
-				var fieldDependencyPropertyQuery = propertyOwner.GetAllFields().Where(p => p.Name == name + "Property");
+				var propertyDependencyPropertyQuery = propertyOwner.GetAllPropertiesWithName(name + "Property");
+				var fieldDependencyPropertyQuery = propertyOwner.GetAllFieldsWithName(name + "Property");
 
 				return propertyDependencyPropertyQuery.Any() || fieldDependencyPropertyQuery.Any();
 			}
@@ -373,7 +399,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 		{
 			var type = FindType(ownerType);
 
-			if (type != null)
+			if (type != null && !string.IsNullOrEmpty(propertyName))
 			{
 				do
 				{
@@ -381,7 +407,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 
 					var resolvedType = type;
 
-					var property = resolvedType.GetAllProperties().FirstOrDefault(p => p.Name == propertyName);
+					var property = resolvedType.GetAllPropertiesWithName(propertyName).FirstOrDefault();
 					var setMethod = resolvedType.GetMethods().FirstOrDefault(p => p.Name == "Set" + propertyName);
 
 					if (property != null)
@@ -512,15 +538,15 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 		{
 			do
 			{
-				var property = type.GetAllProperties().FirstOrDefault(p => p.Name == name);
+				var property = type.GetAllPropertiesWithName(name).FirstOrDefault();
 				var setMethod = type.GetMethods().FirstOrDefault(p => p.Name == "Set" + name);
 
-				if (property != null && property.GetMethod.IsStatic)
+				if (property?.GetMethod?.IsStatic ?? false)
 				{
 					return true;
 				}
 
-				if (setMethod != null && setMethod.IsStatic)
+				if (setMethod?.IsStatic ?? false)
 				{
 					return true;
 				}
@@ -583,7 +609,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 		/// </summary>
 		private bool IsInitializableCollection(XamlType declaringType, string propertyName)
 		{
-			var property = GetPropertyByName(declaringType, propertyName);
+			var property = GetPropertyWithName(declaringType, propertyName);
 
 			if (property != null && IsInitializableProperty(property))
 			{
@@ -665,11 +691,10 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 		/// <summary>
 		/// Gets the 
 		/// </summary>
-		private IPropertySymbol GetPropertyByName(XamlType declaringType, string propertyName)
+		private IPropertySymbol GetPropertyWithName(XamlType declaringType, string propertyName)
 		{
 			var type = FindType(declaringType);
-
-			return type?.GetAllProperties().FirstOrDefault(p => p.Name == propertyName);
+			return type?.GetAllPropertiesWithName(propertyName).FirstOrDefault();
 		}
 
 		private static bool IsDouble(string typeName)
@@ -733,12 +758,26 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 		{
 			if (type != null)
 			{
+				// Search first using the explicit XML namespace in known namespaces
+
+				// Remove the namespace conditionals declaration
+				var trimmedNamespace = type.PreferredXamlNamespace.Split('?').First();
+				var clrNamespaces = _knownNamespaces.UnoGetValueOrDefault(trimmedNamespace, new string[0]);
+
+				foreach (var clrNamespace in clrNamespaces)
+				{
+					if(_findType(clrNamespace + "." + type.Name) is { } result)
+					{
+						return result;
+					}
+				}
+
+				// Then use fuzzy lookup
 				var ns = _fileDefinition
 					.Namespaces
 					// Ensure that prefixless declaration (generally xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation") is considered first, otherwise PreferredXamlNamespace matching can go awry
 					.OrderByDescending(n => n.Prefix.IsNullOrEmpty())
 					.FirstOrDefault(n => n.Namespace == type.PreferredXamlNamespace);
-				var isKnownNamespace = ns?.Prefix?.HasValue() ?? false;
 
 				if (
 					type.PreferredXamlNamespace == XamlConstants.XamlXmlNamespace
@@ -748,6 +787,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 					return _findType(XamlConstants.Namespaces.Data + ".Binding");
 				}
 
+				var isKnownNamespace = ns?.Prefix?.HasValue() ?? false;
 				var fullName = isKnownNamespace ? ns.Prefix + ":" + type.Name : type.Name;
 
 				return _findType(fullName);

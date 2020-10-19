@@ -12,7 +12,7 @@ using Buffer = Windows.Storage.Streams.Buffer;
 
 namespace Windows.Storage
 {
-	public sealed partial class StorageFile
+	partial class StorageFile
 	{
 		private abstract class ImplementationBase
 		{
@@ -32,7 +32,7 @@ namespace Windows.Storage
 
 			public virtual string DisplayName => global::System.IO.Path.GetFileNameWithoutExtension(Path);
 
-			public virtual string ContentType => GetContentTypeFromFileType(FileType);
+			public virtual string ContentType => MimeTypeService.GetFromFileExtension(FileType);
 
 			public abstract DateTimeOffset DateCreated { get; }
 
@@ -48,7 +48,7 @@ namespace Windows.Storage
 			public abstract Task<IRandomAccessStreamWithContentType> Open(CancellationToken ct, FileAccessMode accessMode, StorageOpenOptions options);
 
 			public virtual async Task<Stream> OpenStream(CancellationToken ct, FileAccessMode accessMode, StorageOpenOptions options)
-				=> (await Open(ct, accessMode, options)).AsStream();
+				=> (await Open(ct, accessMode, options).AsTask(ct)).AsStream();
 
 			public abstract Task<StorageStreamTransaction> OpenTransactedWrite(CancellationToken ct, StorageOpenOptions option);
 

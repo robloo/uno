@@ -1,5 +1,4 @@
-﻿#if NETFRAMEWORK
-using SkiaSharp;
+﻿using SkiaSharp;
 using System;
 using System.ComponentModel;
 using System.Linq;
@@ -155,4 +154,3 @@ namespace Uno.UI.Skia.Platform
 		}
 	}
 }
-#endif

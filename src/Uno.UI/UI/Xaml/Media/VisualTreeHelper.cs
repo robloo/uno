@@ -1,4 +1,4 @@
-﻿#nullable enable
+﻿#nullable disable // Not supported by WinUI yet
 // #define TRACE_HIT_TESTING
 
 using System;
@@ -54,16 +54,16 @@ namespace Windows.UI.Xaml.Media
 			throw new NotSupportedException();
 		}
 
-		public static IEnumerable<UIElement> FindElementsInHostCoordinates(Point intersectingPoint, UIElement subtree)
+		public static IEnumerable<UIElement> FindElementsInHostCoordinates(Point intersectingPoint, UIElement/* ? */ subtree)
 			=> FindElementsInHostCoordinates(intersectingPoint, subtree, false);
 
 		[Uno.NotImplemented]
-		public static IEnumerable<UIElement> FindElementsInHostCoordinates(Rect intersectingRect, UIElement subtree)
+		public static IEnumerable<UIElement> FindElementsInHostCoordinates(Rect intersectingRect, UIElement/* ? */ subtree)
 		{
 			throw new NotSupportedException();
 		}
 
-		public static IEnumerable<UIElement> FindElementsInHostCoordinates(Point intersectingPoint, UIElement? subtree, bool includeAllElements)
+		public static IEnumerable<UIElement> FindElementsInHostCoordinates(Point intersectingPoint, UIElement/* ? */ subtree, bool includeAllElements)
 		{
 			if (subtree != null)
 			{
@@ -101,12 +101,12 @@ namespace Windows.UI.Xaml.Media
 		}
 
 		[Uno.NotImplemented]
-		public static IEnumerable<UIElement> FindElementsInHostCoordinates(Rect intersectingRect, UIElement subtree, bool includeAllElements)
+		public static IEnumerable<UIElement> FindElementsInHostCoordinates(Rect intersectingRect, UIElement/* ? */ subtree, bool includeAllElements)
 		{
 			throw new NotSupportedException();
 		}
 
-		public static DependencyObject? GetChild(DependencyObject reference, int childIndex)
+		public static DependencyObject/* ? */ GetChild(DependencyObject reference, int childIndex)
 		{
 #if XAMARIN
 			return (reference as _ViewGroup)?
@@ -145,7 +145,7 @@ namespace Windows.UI.Xaml.Media
 				.AsReadOnly();
 		}
 
-		public static DependencyObject? GetParent(DependencyObject reference)
+		public static DependencyObject/* ? */ GetParent(DependencyObject reference)
 		{
 #if XAMARIN
 			return (reference as _ViewGroup)?
@@ -202,7 +202,9 @@ namespace Windows.UI.Xaml.Media
 
 			return AdaptNative(view);
 		}
-		
+
+#nullable enable
+
 		private static readonly GetHitTestability _defaultGetTestability = elt => elt.GetHitTestVisibility();
 
 		internal static (UIElement? element, Branch? stale) HitTest(
@@ -294,11 +296,13 @@ namespace Windows.UI.Xaml.Media
 				posRelToElement.X /= zoom;
 				posRelToElement.Y /= zoom;
 
-				// No needs to adjust the position:
-				// On Skia the scrolling is achieved using a RenderTransform on the content of the ScrollContentPresenter,
+				// No needs to adjust the position on Skia:
+				// the scrolling is achieved using a RenderTransform on the content of the ScrollContentPresenter,
 				// so it will already be taken in consideration by the case above.
-				//posRelToElement.X += sv.HorizontalOffset;
-				//posRelToElement.Y += sv.VerticalOffset;
+#if __SKIA__
+				posRelToElement.X += sv.HorizontalOffset;
+				posRelToElement.Y += sv.VerticalOffset;
+#endif
 
 				renderingBounds = new Rect(renderingBounds.Location, new Size(sv.ExtentWidth, sv.ExtentHeight));
 			}

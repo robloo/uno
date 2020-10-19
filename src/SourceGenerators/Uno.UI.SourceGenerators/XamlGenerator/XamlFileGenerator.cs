@@ -105,6 +105,8 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 		private readonly INamedTypeSymbol _dependencyObjectSymbol;
 		private readonly INamedTypeSymbol _markupExtensionSymbol;
 		private readonly INamedTypeSymbol _dependencyObjectParseSymbol;
+		private readonly INamedTypeSymbol _androidContentContextSymbol; // Android.Content.Context
+		private readonly INamedTypeSymbol _androidViewSymbol; // Android.Views.View
 
 		private readonly INamedTypeSymbol _iCollectionSymbol;
 		private readonly INamedTypeSymbol _iCollectionOfTSymbol;
@@ -226,9 +228,11 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 			_dataBindingSymbol = GetType("Windows.UI.Xaml.Data.Binding");
 			_styleSymbol = GetType(XamlConstants.Types.Style);
 			_colorSymbol = GetType(XamlConstants.Types.Color);
+			_androidContentContextSymbol = FindType("Android.Content.Context");
+			_androidViewSymbol = FindType("Android.Views.View");
 
 			_markupExtensionTypes = _metadataHelper.GetAllTypesDerivingFrom(_markupExtensionSymbol).ToList();
-			_xamlConversionTypes = _metadataHelper.GetAllTypesAttributedWith(XamlConstants.Types.CreateFromStringAttribute).ToList();
+			_xamlConversionTypes = _metadataHelper.GetAllTypesAttributedWith(GetType(XamlConstants.Types.CreateFromStringAttribute)).ToList();
 
 			_isWasm = isWasm;
 
@@ -280,7 +284,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 			}
 			catch (Exception e)
 			{
-				throw new Exception("Processing failed for file {0}".InvariantCultureFormat(_fileDefinition.FilePath), e);
+				throw new Exception($"Processing failed for file {_fileDefinition.FilePath} ({e})", e);
 			}
 		}
 
@@ -551,7 +555,8 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 					throw new InvalidOperationException($"The reference {reference.Display} could not be found in {reference.Display}");
 				}
 
-				var asm = Mono.Cecil.AssemblyDefinition.ReadAssembly(reference.Display);
+				using var stream = File.OpenRead(reference.Display);
+				var asm = Mono.Cecil.AssemblyDefinition.ReadAssembly(stream);
 
 				if (asm.MainModule.HasResources && asm.MainModule.Resources.Any(r => r.Name.EndsWith("upri")))
 				{
@@ -857,11 +862,14 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 						{
 							var component = CurrentScope.Components[i];
 
-							var isDependencyObject = IsDependencyObject(component);
+							if (HasXBindMarkupExtension(component))
+							{
+								var isDependencyObject = IsDependencyObject(component);
 
-							var wrapInstance = isDependencyObject ? "" : ".GetDependencyObjectForXBind()";
+								var wrapInstance = isDependencyObject ? "" : ".GetDependencyObjectForXBind()";
 
-							writer.AppendLineInvariant($"owner._component_{i}{wrapInstance}.ApplyXBind();");
+								writer.AppendLineInvariant($"owner._component_{i}{wrapInstance}.ApplyXBind();");
+							}
 						}
 					}
 					using (writer.BlockInvariant($"void {bindingsInterfaceName}.StopTracking()")) { }
@@ -1374,7 +1382,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 						{
 							if (child.Type.Name == "Setter")
 							{
-								var propertyNode = FindMember(child, "Property");
+								var propertyNode = FindMember(child, "Property") ?? FindMember(child, "Target");
 								var valueNode = FindMember(child, "Value");
 								var property = propertyNode?.Value.SelectOrDefault(p => p.ToString());
 
@@ -1627,7 +1635,16 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 		private bool HasMarkupExtensionNeedingComponent(XamlObjectDefinition objectDefinition)
 			=> objectDefinition
 				.Members
-				.Any(o => o.Objects.Any(o => o.Type.Name == "Bind" || o.Type.Name == "StaticResource" || o.Type.Name == "ThemeResource"));
+				.Any(o =>
+					o.Objects.Any(o =>
+						o.Type.Name == "Bind"
+						|| o.Type.Name == "StaticResource"
+						|| o.Type.Name == "ThemeResource"
+
+						// Bindings with ElementName properties needs to be resolved during Loading.
+						|| (o.Type.Name == "Binding" && o.Members.Any(m => m.Member.Name == "ElementName"))
+					)
+				);
 
 		/// <summary>
 		/// Does this node or any nested nodes have markup extensions?
@@ -2004,7 +2021,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 												}
 											}
 										}
-										else if (GetKnownNewableListOrCollectionInterface(contentProperty as INamedTypeSymbol, out newableTypeName))
+										else if (GetKnownNewableListOrCollectionInterface(contentProperty.Type as INamedTypeSymbol, out newableTypeName))
 										{
 											if (string.IsNullOrWhiteSpace(newableTypeName))
 											{
@@ -2118,7 +2135,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 				{
 					var name = nameProperty.Value.Value.ToString();
 
-					return elementType?.GetAllProperties().FirstOrDefault(p => p.Name == name);
+					return elementType?.GetAllPropertiesWithName(name).FirstOrDefault();
 				}
 			}
 
@@ -2227,7 +2244,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 					writer.AppendLineInvariant("new {0}()", GetGlobalizedTypeName(type.ToDisplayString()));
 					writer.AppendLineInvariant(isInInitializer ? "," : ";");
 				}
-				else if (resourcesRoot != null || mergedDictionaries != null)
+				else if (resourcesRoot != null || mergedDictionaries != null || themeDictionaries != null)
 				{
 					if (isInInitializer)
 					{
@@ -3472,7 +3489,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 
 			foreach (var part in parts)
 			{
-				if (currentType.GetAllMembers().FirstOrDefault(m => m.Name == part) is ISymbol member)
+				if (currentType.GetAllMembersWithName(part).FirstOrDefault() is ISymbol member)
 				{
 					var propertySymbol = member as IPropertySymbol;
 					var fieldSymbol = member as IFieldSymbol;
@@ -3958,13 +3975,13 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 					.GetMethods()
 					.Any(m =>
 						m.Name == "op_Implicit"
-						&& m.Parameters.FirstOrDefault().SelectOrDefault(p => p.Type.ToDisplayString() == "string")
+						&& m.Parameters.FirstOrDefault().SelectOrDefault(p => Equals(p.Type, _stringSymbol))
 					);
 
 				if (hasImplictToString
 
 					// Can be an object (e.g. in case of Binding.ConverterParameter).
-					|| propertyType.ToDisplayString() == "object"
+					|| Equals(propertyType, _objectSymbol)
 				)
 				{
 					return "@\"" + memberValue.ToString() + "\"";
@@ -4238,6 +4255,11 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 					return $"new RelativeSource(RelativeSourceMode.{resourceName})";
 				}
 
+				if (bindingType.Type.Name == "NullExtension")
+				{
+					return "null";
+				}
+
 				// If type specified in the binding was not found, log and return an error message
 				if (!string.IsNullOrEmpty(bindingType?.Type?.Name ?? string.Empty))
 				{
@@ -4466,7 +4488,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 		{
 			var declaringType = member.DeclaringType;
 			var propertyName = member.Name;
-			var property = GetPropertyByName(declaringType, propertyName);
+			var property = GetPropertyWithName(declaringType, propertyName);
 
 			if (property?.Type is INamedTypeSymbol collectionType)
 			{
@@ -4925,7 +4947,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 				var dataContextMember = FindMember(definition, "DataContext");
 				var nameMember = FindMember(definition, "Name");
 
-				if (!targetType.Is(_elementStubSymbol.BaseType))
+				if (!(targetType?.Is(_elementStubSymbol.BaseType) ?? false))
 				{
 					writer.AppendLineInvariant($"/* Lazy DeferLoadStrategy was ignored because the target type is not based on {_elementStubSymbol.BaseType} */");
 					return null;
@@ -4949,6 +4971,8 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 							string closureName;
 							using (var innerWriter = CreateApplyBlock(writer, GetType(XamlConstants.Types.ElementStub), out closureName))
 							{
+								var elementStubType = new XamlType("", "ElementStub", new List<XamlType>(), new XamlSchemaContext());
+
 								if (hasDataContextMarkup)
 								{
 									// We need to generate the datacontext binding, since the Visibility
@@ -4956,7 +4980,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 
 									var def = new XamlMemberDefinition(
 										new XamlMember("DataContext",
-											new XamlType("", "ElementStub", new List<XamlType>(), new XamlSchemaContext()),
+											elementStubType,
 											false
 										), 0, 0
 									);
@@ -4970,7 +4994,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 								{
 									var def = new XamlMemberDefinition(
 										new XamlMember("Visibility",
-											new XamlType("", "ElementStub", new List<XamlType>(), new XamlSchemaContext()),
+											elementStubType,
 											false
 										), 0, 0
 									);
@@ -4978,6 +5002,25 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 									def.Objects.AddRange(visibilityMember.Objects);
 
 									BuildComplexPropertyValue(innerWriter, def, closureName + ".", closureName);
+
+									if (!IsMemberInsideResourceDictionary(definition, maxDepth: null)
+										&& (HasXBindMarkupExtension(definition) || HasMarkupExtensionNeedingComponent(definition)))
+									{
+										var componentName = $"_component_{ CurrentScope.ComponentCount}";
+										writer.AppendLineInvariant($"this.{componentName} = {closureName};");
+
+										using (writer.BlockInvariant($"void {componentName}_update(object sender, RoutedEventArgs e)"))
+										{
+											// Refresh the bindings when the ElementStub is unloaded. This assumes that
+											// ElementStub will be unloaded **after** the stubbed control has been created
+											// in order for the _component_XXX to be filled, and Bindings.Update() to do its work.
+											writer.AppendLineInvariant($"this.Bindings.Update();");
+										}
+
+										writer.AppendLineInvariant($"{closureName}.Unloaded += {componentName}_update;");
+
+										CurrentScope.Components.Add(new XamlObjectDefinition(elementStubType, 0, 0, definition) { Members = { def } });
+									}
 								}
 								else
 								{
@@ -5075,7 +5118,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 
 		private string GenerateConstructorParameters(XamlType xamlType)
 		{
-			if (IsType(xamlType, "Android.Views.View"))
+			if (IsType(xamlType, _androidViewSymbol))
 			{
 				// For android, all native control must take a context as their first parameters
 				// To be able to use this control from the Xaml, we need to generate a constructor
@@ -5087,7 +5130,7 @@ namespace Uno.UI.SourceGenerators.XamlGenerator
 				{
 					var q = from m in type.Constructors
 							where m.Parameters.Count() == 1
-							where m.Parameters.First().Type.ToDisplayString() == "Android.Content.Context"
+							where Equals(m.Parameters.First().Type, _androidContentContextSymbol)
 							select m;
 
 					var hasContextConstructor = q.Any();

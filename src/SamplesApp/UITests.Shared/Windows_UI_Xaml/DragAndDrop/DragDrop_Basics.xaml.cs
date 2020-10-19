@@ -1,40 +1,45 @@
 ﻿using System;
 using System.Linq;
-using Windows.ApplicationModel.DataTransfer;
+using System.Threading;
+using Windows.Devices.Input;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Input;
 using Uno.UI.Samples.Controls;
 
 namespace UITests.Windows_UI_Xaml.DragAndDrop
 {
-	[Sample]
+	[Sample(
+		Description =
+			"This automated test validate that basic setup of in-app drag and drop works properly. "
+			+ "You can select any item in the left (pink) column than drag and drop it over the right (blue) one to validate behavior.",
+		IgnoreInSnapshotTests = true)]
 	public sealed partial class DragDrop_Basics : UserControl
 	{
 		public DragDrop_Basics()
 		{
 			this.InitializeComponent();
 
-			SubscribeDropEvents(_theTarget);
-			SubscribeDropEvents(_theNestedTarget);
+			var helper = new DragDropTestHelper(Output);
+			helper.SubscribeDragEvents(BasicDragSource);
+			helper.SubscribeDragEvents(TextDragSource);
+			helper.SubscribeDragEvents(LinkDragSource);
+			helper.SubscribeDragEvents(ImageDragSource);
+
+			helper.SubscribeDropEvents(DropTarget);
+
+			AddHandler(PointerPressedEvent, new PointerEventHandler(SleepOnTouchDown), true); // handle too required for the hyperlink
 		}
 
-		private void SubscribeDropEvents(FrameworkElement elt)
+		private static void SleepOnTouchDown(object sender, PointerRoutedEventArgs e)
 		{
-			elt.DragEnter += GetHandler("ENTER");
-			elt.DragOver += GetHandler("OVER");
-			elt.DragLeave += GetHandler("LEAVE");
-			elt.Drop += GetHandler("DROP");
-
-			DragEventHandler GetHandler(string evt) => (snd, args) =>
+			if ((((DragDrop_Basics)sender).Automated.IsChecked ?? false) && e.Pointer.PointerDeviceType == PointerDeviceType.Touch)
 			{
-				if (snd == args.OriginalSource)
-				{
-					_output.Text = $"[{evt}] {GetName(snd)}";
-					args.AcceptedOperation = DataPackageOperation.Copy;
-				}
-			};
+				// Ugly hack: The test engine does not allows us to perform a custom gesture (hold for 300 ms then drag)
+				// So we just freeze the UI thread enough to simulate the delay ...
+				const int holdDelay = 300 /* GestureRecognizer.DragWithTouchMinDelayTicks */ + 50 /* safety */;
+				Thread.Sleep(holdDelay);
+			}
 		}
-
-		private static string GetName(object uiElt) => uiElt is null ? "--null--" : (uiElt as FrameworkElement)?.Name ?? uiElt.GetType().Name;
 	}
 }

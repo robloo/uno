@@ -33,19 +33,37 @@ namespace Uno.UI.Runtime.Skia
 		private readonly GestureLayer _gestureLayer;
 		private readonly UnoCanvas _canvas;
 
+		public CoreCursor PointerCursor
+		{
+			get => new CoreCursor(CoreCursorType.Arrow, 0);
+			set
+			{
+				// ignored
+			}
+		}
+
 		public TizenUIElementPointersSupport(object owner, UnoCanvas canvas)
 		{
 			_owner = (CoreWindow)owner;
 			_ownerEvents = (ICoreWindowEvents)owner;
 			_canvas = canvas;
 			_displayInformation = DisplayInformation.GetForCurrentView();
-			
+
 			_gestureLayer = new GestureLayer(canvas);
 			_gestureLayer.Attach(canvas);
 			_gestureLayer.IsEnabled = true;
 			SetupTapGesture();
 			SetupMomentumGesture();
 		}
+
+		/// <inheritdoc />
+		public void ReleasePointerCapture()
+			=> this.Log().Error("Pointer capture release is not supported on Tizen");
+
+		/// <inheritdoc />
+		public void SetPointerCapture()
+			=> this.Log().Error("Pointer capture is not supported on Tizen");
+
 
 		private void SetupTapGesture()
 		{
@@ -54,7 +72,7 @@ namespace Uno.UI.Runtime.Skia
 		}
 
 		private void SetupMomentumGesture()
-		{			
+		{
 			_gestureLayer.SetMomentumCallback(GestureLayer.GestureState.Move, OnMove);
 		}
 
@@ -151,7 +169,7 @@ namespace Uno.UI.Runtime.Skia
 		}
 
 		private Windows.Foundation.Point GetPoint(int x, int y)
-		{			
+		{
 			var scale = _displayInformation.LogicalDpi / 160f;
 			return new Windows.Foundation.Point(x / scale, y / scale);
 		}

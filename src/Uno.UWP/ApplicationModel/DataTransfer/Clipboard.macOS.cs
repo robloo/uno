@@ -19,6 +19,9 @@ namespace Windows.ApplicationModel.DataTransfer
 			DataPackage.SetToNativeClipboard(content);
 		}
 
+		internal static Task SetContentAsync(DataPackage content)
+			=> DataPackage.SetToNativeClipboardAsync(content);
+
 		public static DataPackageView GetContent()
 		{
 			return DataPackage.GetFromNativeClipboard();

@@ -20,6 +20,7 @@ using Windows.UI.Xaml.Media;
 using Windows.Foundation;
 using Windows.UI.Core;
 using Microsoft.Extensions.Logging;
+using Uno.UI.DataBinding;
 
 namespace Windows.UI.Xaml.Controls
 {
@@ -96,12 +97,15 @@ namespace Windows.UI.Xaml.Controls
 			OnTextAlignmentChanged(CreateInitialValueChangerEventArgs(TextAlignmentProperty, TextAlignmentProperty.GetMetadata(GetType()).DefaultValue, TextAlignment));
 			OnTextWrappingChanged(CreateInitialValueChangerEventArgs(TextWrappingProperty, TextWrappingProperty.GetMetadata(GetType()).DefaultValue, TextWrapping));
 			OnFocusStateChanged((FocusState)FocusStateProperty.GetMetadata(GetType()).DefaultValue, FocusState, initial: true);
+			OnVerticalContentAlignmentChanged(VerticalAlignment.Top, VerticalContentAlignment);
+			OnTextCharacterCasingChanged(CreateInitialValueChangerEventArgs(CharacterCasingProperty, CharacterCasingProperty.GetMetadata(GetType()).DefaultValue, CharacterCasing));
 
 			var buttonRef = _deleteButton?.GetTarget();
 
 			if (buttonRef != null)
 			{
-				buttonRef.Command = new DelegateCommand(DeleteText);
+				var thisRef = (this as IWeakReferenceProvider).WeakReference;
+				buttonRef.Command = new DelegateCommand(() => (thisRef.Target as TextBox)?.DeleteText());
 			}
 
 			InitializePropertiesPartial();
@@ -432,6 +436,35 @@ namespace Windows.UI.Xaml.Controls
 
 		#endregion
 
+#if __IOS__ || NET461 || __WASM__ || __SKIA__ || __NETSTD_REFERENCE__ || __MACOS__
+		[Uno.NotImplemented("__IOS__", "NET461", "__WASM__", "__SKIA__", "__NETSTD_REFERENCE__", "__MACOS__")]
+#endif
+		public CharacterCasing CharacterCasing
+		{
+			get => (CharacterCasing)this.GetValue(CharacterCasingProperty);
+			set => this.SetValue(CharacterCasingProperty, value);
+		}
+
+#if __IOS__ || NET461 || __WASM__ || __SKIA__ || __NETSTD_REFERENCE__ || __MACOS__
+		[Uno.NotImplemented("__IOS__", "NET461", "__WASM__", "__SKIA__", "__NETSTD_REFERENCE__", "__MACOS__")]
+#endif
+		public static DependencyProperty CharacterCasingProperty { get; } =
+			DependencyProperty.Register(
+				nameof(CharacterCasing),
+				typeof(CharacterCasing),
+				typeof(TextBox),
+				new FrameworkPropertyMetadata(
+						defaultValue: CharacterCasing.Normal,
+						propertyChangedCallback: (s, e) => ((TextBox)s)?.OnTextCharacterCasingChanged(e))
+				);
+
+		private void OnTextCharacterCasingChanged(DependencyPropertyChangedEventArgs e)
+		{
+			OnTextCharacterCasingChangedPartial(e);
+		}
+
+		partial void OnTextCharacterCasingChangedPartial(DependencyPropertyChangedEventArgs e);
+
 		#region IsReadOnly DependencyProperty
 
 		public bool IsReadOnly
@@ -710,5 +743,24 @@ namespace Windows.UI.Xaml.Controls
 		protected override AutomationPeer OnCreateAutomationPeer() => new TextBoxAutomationPeer(this);
 
 		public override string GetAccessibilityInnerText() => Text;
+
+		protected override void OnVerticalContentAlignmentChanged(VerticalAlignment oldVerticalContentAlignment, VerticalAlignment newVerticalContentAlignment)
+		{
+			base.OnVerticalContentAlignmentChanged(oldVerticalContentAlignment, newVerticalContentAlignment);
+
+			if (_contentElement != null)
+			{
+				_contentElement.VerticalAlignment = newVerticalContentAlignment;
+			}
+
+			if (_placeHolder != null)
+			{
+				_placeHolder.VerticalAlignment = newVerticalContentAlignment;
+			}
+
+			OnVerticalContentAlignmentChangedPartial(oldVerticalContentAlignment, newVerticalContentAlignment);
+		}
+
+		partial void OnVerticalContentAlignmentChangedPartial(VerticalAlignment oldVerticalContentAlignment, VerticalAlignment newVerticalContentAlignment);
 	}
 }

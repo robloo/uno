@@ -17,9 +17,4 @@ namespace Windows.Foundation
 
 		void GetResults();
 	}
-
-	internal interface IAsyncActionWithProgressInternal<TProgress> : IAsyncActionWithProgress<TProgress>
-	{
-		Task Task { get; }
-	}
 }

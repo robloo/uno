@@ -146,10 +146,13 @@ namespace Windows.UI.Xaml
 		/// Apply load-time binding updates. Processes the x:Bind markup for the current FrameworkElement, applies load-time ElementName bindings, and updates ResourceBindings.
 		/// </summary>
 		public void ApplyCompiledBindings()
-		{
-			_properties.ApplyCompiledBindings();
-			UpdateResourceBindings(isThemeChangedUpdate: false);
-		}
+			=> _properties.ApplyCompiledBindings();
+
+		/// <summary>
+		/// Apply load-time binding updates. Processes the x:Bind markup for the current FrameworkElement, applies load-time ElementName bindings, and updates ResourceBindings.
+		/// </summary>
+		internal void ApplyElementNameBindings()
+			=> _properties.ApplyElementNameBindings();
 
 		private string GetOwnerDebugString()
 			=> ActualInstance?.GetType().ToString() ?? "[collected]";
@@ -344,7 +347,11 @@ namespace Windows.UI.Xaml
 
 		public void SetResourceBinding(DependencyProperty dependencyProperty, object resourceKey, bool isTheme, object context)
 		{
-			var binding = new ResourceBinding(resourceKey, isTheme, context, _precedenceOverride ?? DependencyPropertyValuePrecedences.Local);
+			var precedence = _overriddenPrecedences?.Count > 0
+				? _overriddenPrecedences.Peek()
+				: default;
+
+			var binding = new ResourceBinding(resourceKey, isTheme, context, precedence ?? DependencyPropertyValuePrecedences.Local);
 			SetBinding(dependencyProperty, binding);
 		}
 
